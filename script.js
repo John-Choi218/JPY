@@ -2,16 +2,43 @@
 let currentInvestments = [];
 let completedInvestments = [];
 
-// LocalStorage에서 데이터 로드
-function loadData() {
-    const savedCurrent = localStorage.getItem('currentInvestments');
-    const savedCompleted = localStorage.getItem('completedInvestments');
-    
-    if (savedCurrent) currentInvestments = JSON.parse(savedCurrent);
-    if (savedCompleted) completedInvestments = JSON.parse(savedCompleted);
-    
-    updateTables();
-    updateSummary();
+// Firebase 초기화
+const firebaseConfig = {
+    apiKey: "AIzaSyDNH3kgVbLnf-1-htdxoSvSYpZu2yQKtKg",
+    authDomain: "jpyi-dbeb8.firebaseapp.com",
+    projectId: "jpyi-dbeb8",
+    storageBucket: "jpyi-dbeb8.firebasestorage.app",
+    messagingSenderId: "453717733641",
+    appId: "1:453717733641:web:260fb49f655fef4fd663d8"
+};
+
+// Firebase 초기화
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// 데이터 로드
+async function loadData() {
+    try {
+        // 현재 투자 데이터 로드
+        const currentSnapshot = await db.collection('currentInvestments').get();
+        currentInvestments = currentSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // 완료된 투자 데이터 로드
+        const completedSnapshot = await db.collection('completedInvestments').get();
+        completedInvestments = completedSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        updateTables();
+        updateSummary();
+    } catch (error) {
+        console.error('데이터 로드 실패:', error);
+        alert('데이터 로드에 실패했습니다.');
+    }
 }
 
 // 데이터 저장
