@@ -254,28 +254,88 @@ function updateSummary() {
 // 초기 데이터 로드
 loadData();
 
-// 완료된 투자 수정 함수
+// 완료된 투자 수정 함수 수정
 async function editCompletedInvestment(id) {
     const investment = completedInvestments.find(inv => inv.id === id);
     if (!investment) return;
     
-    const newSellRate = prompt('새로운 매도 환율을 입력하세요 (100엔 기준):', investment.sellExchangeRate);
-    if (!newSellRate) return;
+    // 현재 날짜들을 YYYY-MM-DD 형식으로 변환
+    const purchaseDate = new Date(investment.date).toISOString().split('T')[0];
+    const sellDate = new Date(investment.sellDate).toISOString().split('T')[0];
     
-    const sellExchangeRate = Number(newSellRate);
-    if (isNaN(sellExchangeRate) || sellExchangeRate <= 0) {
-        alert('올바른 환율을 입력해주세요.');
+    // 수정할 정보를 입력받을 폼 생성
+    const form = document.createElement('form');
+    form.innerHTML = `
+        <div style="margin: 10px 0;">
+            <label>구매일:<br>
+                <input type="date" id="editPurchaseDate" value="${purchaseDate}" required>
+            </label>
+        </div>
+        <div style="margin: 10px 0;">
+            <label>매도일:<br>
+                <input type="date" id="editSellDate" value="${sellDate}" required>
+            </label>
+        </div>
+        <div style="margin: 10px 0;">
+            <label>엔화 금액:<br>
+                <input type="number" id="editAmountYen" value="${investment.amountYen}" required>
+            </label>
+        </div>
+        <div style="margin: 10px 0;">
+            <label>구매 환율 (100엔):<br>
+                <input type="number" step="0.01" id="editExchangeRate" value="${investment.exchangeRate}" required>
+            </label>
+        </div>
+        <div style="margin: 10px 0;">
+            <label>매도 환율 (100엔):<br>
+                <input type="number" step="0.01" id="editSellExchangeRate" value="${investment.sellExchangeRate}" required>
+            </label>
+        </div>
+    `;
+    
+    // 사용자에게 폼 표시
+    const result = await Swal.fire({
+        title: '투자 실적 수정',
+        html: form,
+        showCancelButton: true,
+        confirmButtonText: '수정',
+        cancelButtonText: '취소',
+        preConfirm: () => {
+            return {
+                purchaseDate: document.getElementById('editPurchaseDate').value,
+                sellDate: document.getElementById('editSellDate').value,
+                amountYen: Number(document.getElementById('editAmountYen').value),
+                exchangeRate: Number(document.getElementById('editExchangeRate').value),
+                sellExchangeRate: Number(document.getElementById('editSellExchangeRate').value)
+            };
+        }
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    const newData = result.value;
+    
+    // 유효성 검사
+    if (!newData.purchaseDate || !newData.sellDate || 
+        !newData.amountYen || !newData.exchangeRate || !newData.sellExchangeRate) {
+        alert('모든 필드를 입력해주세요.');
         return;
     }
     
     // 새로운 금액 계산
-    const sellAmountKrw = investment.amountYen * (sellExchangeRate / 100);
-    const profitLoss = sellAmountKrw - investment.amountKrw;
-    const profitLossRate = (profitLoss / investment.amountKrw) * 100;
+    const amountKrw = newData.amountYen * (newData.exchangeRate / 100);
+    const sellAmountKrw = newData.amountYen * (newData.sellExchangeRate / 100);
+    const profitLoss = sellAmountKrw - amountKrw;
+    const profitLossRate = (profitLoss / amountKrw) * 100;
     
     const updatedInvestment = {
         ...investment,
-        sellExchangeRate: sellExchangeRate,
+        date: new Date(newData.purchaseDate).toISOString(),
+        sellDate: new Date(newData.sellDate).toISOString(),
+        amountYen: newData.amountYen,
+        exchangeRate: newData.exchangeRate,
+        sellExchangeRate: newData.sellExchangeRate,
+        amountKrw: amountKrw,
         sellAmountKrw: sellAmountKrw,
         profitLoss: profitLoss,
         profitLossRate: profitLossRate
@@ -294,9 +354,19 @@ async function editCompletedInvestment(id) {
         // 화면 업데이트
         updateTables();
         updateSummary();
+        
+        Swal.fire({
+            icon: 'success',
+            title: '수정 완료',
+            text: '투자 실적이 성공적으로 수정되었습니다.'
+        });
     } catch (error) {
         console.error('투자 실적 수정 실패:', error);
-        alert('투자 실적 수정에 실패했습니다.');
+        Swal.fire({
+            icon: 'error',
+            title: '수정 실패',
+            text: '투자 실적 수정에 실패했습니다.'
+        });
     }
 }
 
