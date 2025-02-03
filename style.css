@@ -85,7 +85,7 @@ button:hover {
 
 table {
     width: 100%;
-    min-width: 600px; /* 최소 너비 설정 */
+    min-width: 360px; /* 갤럭시 S23 화면 크기에 맞게 수정 */
     border-collapse: collapse;
     background-color: white;
     margin-bottom: 20px;
@@ -93,10 +93,10 @@ table {
 }
 
 th, td {
-    padding: 10px 8px;
+    padding: 6px 4px; /* 패딩 축소 */
     text-align: left;
     border-bottom: 1px solid #ddd;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 th {
@@ -135,14 +135,16 @@ th {
 /* 버튼 스타일 */
 .button-group {
     display: flex;
-    gap: 5px;
+    gap: 3px; /* 버튼 간격 축소 */
+    justify-content: flex-start;
 }
 
 .edit-button, .delete-button, .sell-button {
     width: auto;
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: 4px 6px; /* 패딩 축소 */
+    font-size: 0.75rem; /* 폰트 크기 축소 */
     margin: 0;
+    white-space: nowrap;
 }
 
 .edit-button {
@@ -168,20 +170,24 @@ th {
     
     .button-group {
         display: flex;
-        flex-direction: column;
-        gap: 5px;
+        flex-direction: row; /* 가로 배치로 변경 */
+        gap: 2px; /* 버튼 간격 더 축소 */
     }
     
     .edit-button, .delete-button, .sell-button {
-        width: 100%;
-        margin-bottom: 3px;
+        flex: 1; /* 버튼 너비 균등 분배 */
+        padding: 4px 6px;
+        font-size: 0.7rem;
+        margin: 0;
+        min-width: 40px; /* 최소 너비 설정 */
+    }
+    
+    th, td {
+        padding: 4px 3px; /* 패딩 더 축소 */
+        font-size: 0.8rem;
     }
     
     .summary-cards {
         grid-template-columns: 1fr;
-    }
-    
-    th, td {
-        font-size: 0.85rem;
     }
 }
