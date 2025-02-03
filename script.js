@@ -55,14 +55,14 @@ document.getElementById('investmentForm').addEventListener('submit', async funct
     const amountYen = Number(document.getElementById('amountYen').value);
     const exchangeRate = Number(document.getElementById('exchangeRate').value);
     
-    // 100엔 단위를 1엔 단위로 변환하여 계산
-    const ratePerYen = exchangeRate / 100;
+    // 100엔 단위로 계산
+    const amountKrw = (amountYen / 100) * exchangeRate;
+    
     const investment = {
         date: new Date(purchaseDate).toISOString(),
         amountYen: amountYen,
-        exchangeRate: exchangeRate, // 100엔 단위 그대로 저장
-        ratePerYen: ratePerYen, // 1엔당 환율 추가 저장
-        amountKrw: amountYen * ratePerYen
+        exchangeRate: exchangeRate,
+        amountKrw: amountKrw
     };
     
     try {
@@ -76,23 +76,17 @@ document.getElementById('investmentForm').addEventListener('submit', async funct
 });
 
 // 투자 수정
-function editInvestment(id) {
+async function editInvestment(id) {
     const investment = currentInvestments.find(inv => inv.id === id);
     if (!investment) return;
     
-    // 수정할 데이터를 폼에 채우기
     document.getElementById('purchaseDate').value = new Date(investment.date).toISOString().split('T')[0];
     document.getElementById('amountYen').value = investment.amountYen;
     document.getElementById('exchangeRate').value = investment.exchangeRate;
     
-    // 기존 데이터 삭제
-    currentInvestments = currentInvestments.filter(inv => inv.id !== id);
-    
-    // 수정 모드임을 표시
     document.getElementById('investmentForm').dataset.editMode = id;
     document.querySelector('#investmentForm button[type="submit"]').textContent = '수정';
     
-    // 수정 취소 버튼 추가
     if (!document.getElementById('cancelEdit')) {
         const cancelButton = document.createElement('button');
         cancelButton.id = 'cancelEdit';
@@ -135,16 +129,15 @@ async function sellInvestment(id) {
         return;
     }
     
-    const sellRatePerYen = sellExchangeRate / 100;
-    const sellAmountKrw = investment.amountYen * sellRatePerYen;
+    // 100엔 단위로 계산
+    const sellAmountKrw = (investment.amountYen / 100) * sellExchangeRate;
     const profitLoss = sellAmountKrw - investment.amountKrw;
     const profitLossRate = (profitLoss / investment.amountKrw) * 100;
     
     const completedInvestment = {
         ...investment,
         sellDate: new Date().toISOString(),
-        sellExchangeRate: sellExchangeRate, // 100엔 단위
-        sellRatePerYen: sellRatePerYen, // 1엔당 환율
+        sellExchangeRate: sellExchangeRate,
         sellAmountKrw: sellAmountKrw,
         profitLoss: profitLoss,
         profitLossRate: profitLossRate
@@ -167,35 +160,42 @@ async function sellInvestment(id) {
 function updateTables() {
     // 현재 투자 테이블 업데이트
     const currentTable = document.querySelector('#currentInvestmentsTable tbody');
-    currentTable.innerHTML = currentInvestments.map(inv => `
+    currentTable.innerHTML = currentInvestments.map(inv => {
+        const amountYen100 = inv.amountYen.toLocaleString(); // 100엔 단위로 표시
+        const amountKrw = inv.amountKrw.toLocaleString(); // 원화 금액
+        
+        return `
         <tr>
             <td>${new Date(inv.date).toLocaleDateString()}</td>
-            <td>${inv.amountYen.toLocaleString()}엔</td>
+            <td>${amountYen100}엔</td>
             <td>${inv.exchangeRate.toFixed(2)}원</td>
-            <td>${inv.amountKrw.toLocaleString()}원</td>
+            <td>${amountKrw}원</td>
             <td>
                 <div class="button-group">
-                    <button class="edit-button" onclick="editInvestment(${inv.id})">수정</button>
-                    <button class="delete-button" onclick="deleteInvestment(${inv.id})">삭제</button>
-                    <button class="sell-button" onclick="sellInvestment(${inv.id})">매도</button>
+                    <button class="edit-button" onclick="editInvestment('${inv.id}')">수정</button>
+                    <button class="delete-button" onclick="deleteInvestment('${inv.id}')">삭제</button>
+                    <button class="sell-button" onclick="sellInvestment('${inv.id}')">매도</button>
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
     
     // 투자 실적 테이블 업데이트
     const historyTable = document.querySelector('#historyTable tbody');
-    historyTable.innerHTML = completedInvestments.map(inv => `
+    historyTable.innerHTML = completedInvestments.map(inv => {
+        const amountYen100 = inv.amountYen.toLocaleString(); // 100엔 단위로 표시
+        
+        return `
         <tr>
             <td>${new Date(inv.date).toLocaleDateString()}</td>
             <td>${new Date(inv.sellDate).toLocaleDateString()}</td>
-            <td>${inv.amountYen.toLocaleString()}엔</td>
+            <td>${amountYen100}엔</td>
             <td>${inv.exchangeRate.toFixed(2)}원</td>
             <td>${inv.sellExchangeRate.toFixed(2)}원</td>
             <td>${inv.profitLoss.toLocaleString()}원</td>
             <td>${inv.profitLossRate.toFixed(2)}%</td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 // 요약 정보 업데이트
@@ -211,3 +211,6 @@ function updateSummary() {
 
 // 초기 데이터 로드
 loadData();
+
+// 입력 폼 HTML도 수정이 필요합니다
+document.getElementById('amountYen').placeholder = '100엔 단위로 입력';
