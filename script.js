@@ -107,12 +107,23 @@ function cancelEdit() {
 }
 
 // 투자 삭제
-function deleteInvestment(id) {
+async function deleteInvestment(id) {
     if (!confirm('정말 삭제하시겠습니까?')) return;
     
-    currentInvestments = currentInvestments.filter(inv => inv.id !== id);
-    saveData();
-    updateTables();
+    try {
+        // Firestore에서 문서 삭제
+        await db.collection('currentInvestments').doc(id).delete();
+        
+        // 로컬 배열에서도 삭제
+        currentInvestments = currentInvestments.filter(inv => inv.id !== id);
+        
+        // 화면 업데이트
+        updateTables();
+        updateSummary();
+    } catch (error) {
+        console.error('투자 삭제 실패:', error);
+        alert('투자 삭제에 실패했습니다.');
+    }
 }
 
 // 투자 매도
@@ -276,7 +287,7 @@ async function deleteCompletedInvestment(id) {
     if (!confirm('정말 이 투자 실적을 삭제하시겠습니까?')) return;
     
     try {
-        // Firestore에서 삭제
+        // Firestore에서 문서 삭제
         await db.collection('completedInvestments').doc(id).delete();
         
         // 로컬 배열에서 삭제
