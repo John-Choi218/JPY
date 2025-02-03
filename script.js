@@ -114,13 +114,32 @@ async function deleteInvestment(id) {
     if (!confirm('정말 삭제하시겠습니까?')) return;
     
     try {
-        await db.collection('currentInvestments').doc(id).delete();
+        console.log('삭제 시도:', id); // 삭제 시도 로그
+        
+        // Firestore에서 문서 삭제
+        const docRef = db.collection('currentInvestments').doc(id);
+        await docRef.delete();
+        console.log('Firestore 삭제 완료'); // 삭제 완료 로그
+        
+        // 로컬 배열에서 삭제
         currentInvestments = currentInvestments.filter(inv => inv.id !== id);
+        console.log('로컬 배열 삭제 완료'); // 로컬 삭제 로그
+        
+        // 화면 업데이트
         updateTables();
         updateSummary();
+        
+        // 삭제 확인을 위해 다시 한번 문서 조회
+        const deletedDoc = await docRef.get();
+        if (!deletedDoc.exists) {
+            console.log('문서가 성공적으로 삭제됨');
+        } else {
+            console.log('문서가 여전히 존재함');
+        }
+        
     } catch (error) {
         console.error('투자 삭제 실패:', error);
-        alert('투자 삭제에 실패했습니다.');
+        alert('투자 삭제에 실패했습니다. 에러: ' + error.message);
     }
 }
 
@@ -176,6 +195,7 @@ function updateTables() {
     // 현재 투자 테이블 업데이트
     const currentTable = document.querySelector('#currentInvestmentsTable tbody');
     currentTable.innerHTML = currentInvestments.map(inv => {
+        console.log('현재 투자 ID:', inv.id); // ID 확인 로그
         const amountYen = inv.amountYen.toLocaleString();
         const amountKrw = inv.amountKrw.toLocaleString();
         
@@ -198,6 +218,7 @@ function updateTables() {
     // 투자 실적 테이블 업데이트
     const historyTable = document.querySelector('#historyTable tbody');
     historyTable.innerHTML = completedInvestments.map(inv => {
+        console.log('완료된 투자 ID:', inv.id); // ID 확인 로그
         const amountYen = inv.amountYen.toLocaleString();
         
         return `
@@ -284,12 +305,31 @@ async function deleteCompletedInvestment(id) {
     if (!confirm('정말 이 투자 실적을 삭제하시겠습니까?')) return;
     
     try {
-        await db.collection('completedInvestments').doc(id).delete();
+        console.log('완료된 투자 삭제 시도:', id); // 삭제 시도 로그
+        
+        // Firestore에서 문서 삭제
+        const docRef = db.collection('completedInvestments').doc(id);
+        await docRef.delete();
+        console.log('Firestore 삭제 완료'); // 삭제 완료 로그
+        
+        // 로컬 배열에서 삭제
         completedInvestments = completedInvestments.filter(inv => inv.id !== id);
+        console.log('로컬 배열 삭제 완료'); // 로컬 삭제 로그
+        
+        // 화면 업데이트
         updateTables();
         updateSummary();
+        
+        // 삭제 확인을 위해 다시 한번 문서 조회
+        const deletedDoc = await docRef.get();
+        if (!deletedDoc.exists) {
+            console.log('문서가 성공적으로 삭제됨');
+        } else {
+            console.log('문서가 여전히 존재함');
+        }
+        
     } catch (error) {
         console.error('투자 실적 삭제 실패:', error);
-        alert('투자 실적 삭제에 실패했습니다.');
+        alert('투자 실적 삭제에 실패했습니다. 에러: ' + error.message);
     }
 }
