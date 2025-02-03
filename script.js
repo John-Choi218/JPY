@@ -55,13 +55,13 @@ document.getElementById('investmentForm').addEventListener('submit', async funct
     const amountYen = Number(document.getElementById('amountYen').value);
     const exchangeRate = Number(document.getElementById('exchangeRate').value);
     
-    // 100엔 단위로 계산
-    const amountKrw = (amountYen / 100) * exchangeRate;
+    // 1엔 단위로 입력받은 금액을 그대로 사용
+    const amountKrw = amountYen * (exchangeRate / 100);
     
     const investment = {
         date: new Date(purchaseDate).toISOString(),
-        amountYen: amountYen,
-        exchangeRate: exchangeRate,
+        amountYen: amountYen, // 1엔 단위로 저장
+        exchangeRate: exchangeRate, // 100엔 단위 유지
         amountKrw: amountKrw
     };
     
@@ -129,8 +129,8 @@ async function sellInvestment(id) {
         return;
     }
     
-    // 100엔 단위로 계산
-    const sellAmountKrw = (investment.amountYen / 100) * sellExchangeRate;
+    // 1엔 단위로 계산
+    const sellAmountKrw = investment.amountYen * (sellExchangeRate / 100);
     const profitLoss = sellAmountKrw - investment.amountKrw;
     const profitLossRate = (profitLoss / investment.amountKrw) * 100;
     
@@ -144,12 +144,19 @@ async function sellInvestment(id) {
     };
     
     try {
-        await db.runTransaction(async (transaction) => {
-            await transaction.delete(db.collection('currentInvestments').doc(id));
-            await transaction.set(db.collection('completedInvestments').doc(), completedInvestment);
-        });
+        // Firestore에서 현재 투자 삭제
+        await db.collection('currentInvestments').doc(id).delete();
         
-        await loadData();
+        // 완료된 투자에 추가
+        await db.collection('completedInvestments').add(completedInvestment);
+        
+        // 로컬 배열에서도 제거
+        currentInvestments = currentInvestments.filter(inv => inv.id !== id);
+        completedInvestments.push(completedInvestment);
+        
+        // 화면 업데이트
+        updateTables();
+        updateSummary();
     } catch (error) {
         console.error('매도 처리 실패:', error);
         alert('매도 처리에 실패했습니다.');
@@ -161,13 +168,13 @@ function updateTables() {
     // 현재 투자 테이블 업데이트
     const currentTable = document.querySelector('#currentInvestmentsTable tbody');
     currentTable.innerHTML = currentInvestments.map(inv => {
-        const amountYen100 = inv.amountYen.toLocaleString(); // 100엔 단위로 표시
-        const amountKrw = inv.amountKrw.toLocaleString(); // 원화 금액
+        const amountYen = inv.amountYen.toLocaleString();
+        const amountKrw = inv.amountKrw.toLocaleString();
         
         return `
         <tr>
             <td>${new Date(inv.date).toLocaleDateString()}</td>
-            <td>${amountYen100}엔</td>
+            <td>${amountYen}엔</td>
             <td>${inv.exchangeRate.toFixed(2)}원</td>
             <td>${amountKrw}원</td>
             <td>
@@ -183,17 +190,23 @@ function updateTables() {
     // 투자 실적 테이블 업데이트
     const historyTable = document.querySelector('#historyTable tbody');
     historyTable.innerHTML = completedInvestments.map(inv => {
-        const amountYen100 = inv.amountYen.toLocaleString(); // 100엔 단위로 표시
+        const amountYen = inv.amountYen.toLocaleString();
         
         return `
         <tr>
             <td>${new Date(inv.date).toLocaleDateString()}</td>
             <td>${new Date(inv.sellDate).toLocaleDateString()}</td>
-            <td>${amountYen100}엔</td>
+            <td>${amountYen}엔</td>
             <td>${inv.exchangeRate.toFixed(2)}원</td>
             <td>${inv.sellExchangeRate.toFixed(2)}원</td>
             <td>${inv.profitLoss.toLocaleString()}원</td>
             <td>${inv.profitLossRate.toFixed(2)}%</td>
+            <td>
+                <div class="button-group">
+                    <button class="edit-button" onclick="editCompletedInvestment('${inv.id}')">수정</button>
+                    <button class="delete-button" onclick="deleteCompletedInvestment('${inv.id}')">삭제</button>
+                </div>
+            </td>
         </tr>
     `}).join('');
 }
@@ -212,5 +225,68 @@ function updateSummary() {
 // 초기 데이터 로드
 loadData();
 
-// 입력 폼 HTML도 수정이 필요합니다
-document.getElementById('amountYen').placeholder = '100엔 단위로 입력';
+// 완료된 투자 수정 함수
+async function editCompletedInvestment(id) {
+    const investment = completedInvestments.find(inv => inv.id === id);
+    if (!investment) return;
+    
+    const newSellRate = prompt('새로운 매도 환율을 입력하세요 (100엔 기준):', investment.sellExchangeRate);
+    if (!newSellRate) return;
+    
+    const sellExchangeRate = Number(newSellRate);
+    if (isNaN(sellExchangeRate) || sellExchangeRate <= 0) {
+        alert('올바른 환율을 입력해주세요.');
+        return;
+    }
+    
+    // 새로운 금액 계산
+    const sellAmountKrw = investment.amountYen * (sellExchangeRate / 100);
+    const profitLoss = sellAmountKrw - investment.amountKrw;
+    const profitLossRate = (profitLoss / investment.amountKrw) * 100;
+    
+    const updatedInvestment = {
+        ...investment,
+        sellExchangeRate: sellExchangeRate,
+        sellAmountKrw: sellAmountKrw,
+        profitLoss: profitLoss,
+        profitLossRate: profitLossRate
+    };
+    
+    try {
+        // Firestore 업데이트
+        await db.collection('completedInvestments').doc(id).update(updatedInvestment);
+        
+        // 로컬 배열 업데이트
+        const index = completedInvestments.findIndex(inv => inv.id === id);
+        if (index !== -1) {
+            completedInvestments[index] = updatedInvestment;
+        }
+        
+        // 화면 업데이트
+        updateTables();
+        updateSummary();
+    } catch (error) {
+        console.error('투자 실적 수정 실패:', error);
+        alert('투자 실적 수정에 실패했습니다.');
+    }
+}
+
+// 완료된 투자 삭제 함수
+async function deleteCompletedInvestment(id) {
+    if (!confirm('정말 이 투자 실적을 삭제하시겠습니까?')) return;
+    
+    try {
+        // Firestore에서 삭제
+        await db.collection('completedInvestments').doc(id).delete();
+        
+        // 로컬 배열에서 삭제
+        completedInvestments = completedInvestments.filter(inv => inv.id !== id);
+        
+        // 화면 업데이트
+        updateTables();
+        updateSummary();
+    } catch (error) {
+        console.error('투자 실적 삭제 실패:', error);
+        alert('투자 실적 삭제에 실패했습니다.');
+    }
+}
