@@ -22,15 +22,15 @@ async function loadData() {
         // 현재 투자 데이터 로드
         const currentSnapshot = await db.collection('currentInvestments').get();
         currentInvestments = currentSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
+            ...doc.data(),
+            id: doc.id  // Firestore 문서 ID를 명시적으로 저장
         }));
 
         // 완료된 투자 데이터 로드
         const completedSnapshot = await db.collection('completedInvestments').get();
         completedInvestments = completedSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
+            ...doc.data(),
+            id: doc.id  // Firestore 문서 ID를 명시적으로 저장
         }));
 
         updateTables();
@@ -55,19 +55,22 @@ document.getElementById('investmentForm').addEventListener('submit', async funct
     const amountYen = Number(document.getElementById('amountYen').value);
     const exchangeRate = Number(document.getElementById('exchangeRate').value);
     
-    // 1엔 단위로 입력받은 금액을 그대로 사용
     const amountKrw = amountYen * (exchangeRate / 100);
     
     const investment = {
         date: new Date(purchaseDate).toISOString(),
-        amountYen: amountYen, // 1엔 단위로 저장
-        exchangeRate: exchangeRate, // 100엔 단위 유지
+        amountYen: amountYen,
+        exchangeRate: exchangeRate,
         amountKrw: amountKrw
     };
     
     try {
-        await db.collection('currentInvestments').add(investment);
-        await loadData();
+        // Firestore에 문서 추가하고 생성된 ID 받기
+        const docRef = await db.collection('currentInvestments').add(investment);
+        investment.id = docRef.id; // Firestore 문서 ID 저장
+        
+        currentInvestments.push(investment);
+        updateTables();
         this.reset();
     } catch (error) {
         console.error('투자 추가 실패:', error);
@@ -111,13 +114,8 @@ async function deleteInvestment(id) {
     if (!confirm('정말 삭제하시겠습니까?')) return;
     
     try {
-        // Firestore에서 문서 삭제
         await db.collection('currentInvestments').doc(id).delete();
-        
-        // 로컬 배열에서도 삭제
         currentInvestments = currentInvestments.filter(inv => inv.id !== id);
-        
-        // 화면 업데이트
         updateTables();
         updateSummary();
     } catch (error) {
@@ -140,7 +138,6 @@ async function sellInvestment(id) {
         return;
     }
     
-    // 1엔 단위로 계산
     const sellAmountKrw = investment.amountYen * (sellExchangeRate / 100);
     const profitLoss = sellAmountKrw - investment.amountKrw;
     const profitLossRate = (profitLoss / investment.amountKrw) * 100;
@@ -155,17 +152,17 @@ async function sellInvestment(id) {
     };
     
     try {
-        // Firestore에서 현재 투자 삭제
+        // 현재 투자에서 삭제
         await db.collection('currentInvestments').doc(id).delete();
         
         // 완료된 투자에 추가
-        await db.collection('completedInvestments').add(completedInvestment);
+        const docRef = await db.collection('completedInvestments').add(completedInvestment);
+        completedInvestment.id = docRef.id; // 새로 생성된 문서 ID 저장
         
-        // 로컬 배열에서도 제거
+        // 로컬 배열 업데이트
         currentInvestments = currentInvestments.filter(inv => inv.id !== id);
         completedInvestments.push(completedInvestment);
         
-        // 화면 업데이트
         updateTables();
         updateSummary();
     } catch (error) {
@@ -287,13 +284,8 @@ async function deleteCompletedInvestment(id) {
     if (!confirm('정말 이 투자 실적을 삭제하시겠습니까?')) return;
     
     try {
-        // Firestore에서 문서 삭제
         await db.collection('completedInvestments').doc(id).delete();
-        
-        // 로컬 배열에서 삭제
         completedInvestments = completedInvestments.filter(inv => inv.id !== id);
-        
-        // 화면 업데이트
         updateTables();
         updateSummary();
     } catch (error) {
