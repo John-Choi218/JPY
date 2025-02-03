@@ -2,6 +2,12 @@
 let currentInvestments = [];
 let completedInvestments = [];
 
+// 전역 변수에 설정값 추가
+let settings = {
+    buyThreshold: 0,
+    sellThreshold: 0
+};
+
 // Firebase 초기화
 const firebaseConfig = {
     apiKey: "AIzaSyDNH3kgVbLnf-1-htdxoSvSYpZu2yQKtKg",
@@ -47,14 +53,40 @@ function saveData() {
     localStorage.setItem('completedInvestments', JSON.stringify(completedInvestments));
 }
 
-// 새로운 투자 추가
+// 투자 수정
+async function editInvestment(id) {
+    const investment = currentInvestments.find(inv => inv.id === id);
+    if (!investment) return;
+    
+    document.getElementById('purchaseDate').value = new Date(investment.date).toISOString().split('T')[0];
+    document.getElementById('amountYen').value = investment.amountYen;
+    document.getElementById('exchangeRate').value = investment.exchangeRate;
+    
+    // 폼의 submit 버튼 텍스트 변경
+    const submitButton = document.querySelector('#investmentForm button[type="submit"]');
+    submitButton.textContent = '수정';
+    
+    // 수정 모드 설정
+    document.getElementById('investmentForm').dataset.editMode = id;
+    
+    // 취소 버튼 추가
+    if (!document.getElementById('cancelEdit')) {
+        const cancelButton = document.createElement('button');
+        cancelButton.id = 'cancelEdit';
+        cancelButton.type = 'button';
+        cancelButton.textContent = '취소';
+        cancelButton.onclick = cancelEdit;
+        document.getElementById('investmentForm').appendChild(cancelButton);
+    }
+}
+
+// 투자 폼 제출 이벤트 수정
 document.getElementById('investmentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const purchaseDate = document.getElementById('purchaseDate').value;
     const amountYen = Number(document.getElementById('amountYen').value);
     const exchangeRate = Number(document.getElementById('exchangeRate').value);
-    
     const amountKrw = amountYen * (exchangeRate / 100);
     
     const investment = {
@@ -65,40 +97,49 @@ document.getElementById('investmentForm').addEventListener('submit', async funct
     };
     
     try {
-        // Firestore에 문서 추가하고 생성된 ID 받기
-        const docRef = await db.collection('currentInvestments').add(investment);
-        investment.id = docRef.id; // Firestore 문서 ID 저장
+        const editMode = this.dataset.editMode;
         
-        currentInvestments.push(investment);
+        if (editMode) {
+            // 수정 모드: 기존 문서 업데이트
+            await db.collection('currentInvestments').doc(editMode).update(investment);
+            
+            // 로컬 배열에서 해당 항목 업데이트
+            const index = currentInvestments.findIndex(inv => inv.id === editMode);
+            if (index !== -1) {
+                currentInvestments[index] = { ...investment, id: editMode };
+            }
+            
+            // 수정 모드 해제
+            delete this.dataset.editMode;
+            document.querySelector('#investmentForm button[type="submit"]').textContent = '추가';
+            if (document.getElementById('cancelEdit')) {
+                document.getElementById('cancelEdit').remove();
+            }
+        } else {
+            // 추가 모드: 새 문서 생성
+            const docRef = await db.collection('currentInvestments').add(investment);
+            investment.id = docRef.id;
+            currentInvestments.push(investment);
+        }
+        
         updateTables();
         this.reset();
+        
+        Swal.fire({
+            icon: 'success',
+            title: editMode ? '수정 완료' : '추가 완료',
+            text: editMode ? '투자 내역이 수정되었습니다.' : '새로운 투자가 추가되었습니다.',
+            timer: 1500
+        });
     } catch (error) {
-        console.error('투자 추가 실패:', error);
-        alert('투자 추가에 실패했습니다.');
+        console.error(editMode ? '투자 수정 실패:' : '투자 추가 실패:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '오류',
+            text: editMode ? '투자 수정에 실패했습니다.' : '투자 추가에 실패했습니다.'
+        });
     }
 });
-
-// 투자 수정
-async function editInvestment(id) {
-    const investment = currentInvestments.find(inv => inv.id === id);
-    if (!investment) return;
-    
-    document.getElementById('purchaseDate').value = new Date(investment.date).toISOString().split('T')[0];
-    document.getElementById('amountYen').value = investment.amountYen;
-    document.getElementById('exchangeRate').value = investment.exchangeRate;
-    
-    document.getElementById('investmentForm').dataset.editMode = id;
-    document.querySelector('#investmentForm button[type="submit"]').textContent = '수정';
-    
-    if (!document.getElementById('cancelEdit')) {
-        const cancelButton = document.createElement('button');
-        cancelButton.id = 'cancelEdit';
-        cancelButton.type = 'button';
-        cancelButton.textContent = '취소';
-        cancelButton.onclick = cancelEdit;
-        document.getElementById('investmentForm').appendChild(cancelButton);
-    }
-}
 
 // 수정 취소
 function cancelEdit() {
@@ -192,12 +233,12 @@ async function sellInvestment(id) {
 
 // 테이블 업데이트
 function updateTables() {
-    // 현재 투자 테이블 업데이트
     const currentTable = document.querySelector('#currentInvestmentsTable tbody');
     currentTable.innerHTML = currentInvestments.map(inv => {
-        console.log('현재 투자 ID:', inv.id); // ID 확인 로그
         const amountYen = inv.amountYen.toLocaleString();
         const amountKrw = inv.amountKrw.toLocaleString();
+        const buyTarget = (inv.exchangeRate - settings.buyThreshold).toFixed(2);
+        const sellTarget = (inv.exchangeRate + settings.sellThreshold).toFixed(2);
         
         return `
         <tr>
@@ -206,6 +247,10 @@ function updateTables() {
             <td>${inv.exchangeRate.toFixed(2)}원</td>
             <td>${amountKrw}원</td>
             <td>
+                <div class="target-rates">
+                    <span class="buy-target">매수: ${buyTarget}원</span>
+                    <span class="sell-target">매도: ${sellTarget}원</span>
+                </div>
                 <div class="button-group">
                     <button class="edit-button" onclick="editInvestment('${inv.id}')">수정</button>
                     <button class="delete-button" onclick="deleteInvestment('${inv.id}')">삭제</button>
@@ -251,8 +296,100 @@ function updateSummary() {
     document.getElementById('averageReturn').textContent = `${averageReturn.toFixed(2)}%`;
 }
 
-// 초기 데이터 로드
-loadData();
+// 설정 로드 함수
+async function loadSettings() {
+    try {
+        const doc = await db.collection('settings').doc('thresholds').get();
+        if (doc.exists) {
+            settings = doc.data();
+        } else {
+            // 기본값 설정
+            settings = {
+                buyThreshold: 0.5,
+                sellThreshold: 0.5
+            };
+            await saveSettings();
+        }
+        // 설정 폼에 값 표시
+        document.getElementById('buyThreshold').value = settings.buyThreshold;
+        document.getElementById('sellThreshold').value = settings.sellThreshold;
+    } catch (error) {
+        console.error('설정 로드 실패:', error);
+    }
+}
+
+// 설정 저장 함수
+async function saveSettings() {
+    try {
+        await db.collection('settings').doc('thresholds').set(settings);
+    } catch (error) {
+        console.error('설정 저장 실패:', error);
+    }
+}
+
+// 설정 버튼 클릭 이벤트
+document.getElementById('openSettings').addEventListener('click', async function() {
+    // 현재 설정값 가져오기
+    try {
+        const doc = await db.collection('settings').doc('thresholds').get();
+        const currentSettings = doc.exists ? doc.data() : { buyThreshold: 0.5, sellThreshold: 0.5 };
+        
+        // SweetAlert2로 설정 모달 표시
+        const { value: formValues } = await Swal.fire({
+            title: '목표 환율 설정',
+            html: `
+                <div class="settings-form">
+                    <div class="form-group">
+                        <label for="buyThreshold">매수 목표 환율 차이 (원)</label>
+                        <input type="number" id="buyThreshold" class="swal2-input" 
+                            value="${currentSettings.buyThreshold}" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="sellThreshold">매도 목표 환율 차이 (원)</label>
+                        <input type="number" id="sellThreshold" class="swal2-input" 
+                            value="${currentSettings.sellThreshold}" step="0.01">
+                    </div>
+                </div>
+            `,
+            focusConfirm: false,
+            showCancelButton: true,
+            confirmButtonText: '저장',
+            cancelButtonText: '취소',
+            preConfirm: () => {
+                return {
+                    buyThreshold: Number(document.getElementById('buyThreshold').value),
+                    sellThreshold: Number(document.getElementById('sellThreshold').value)
+                }
+            }
+        });
+
+        if (formValues) {
+            settings = formValues;
+            await saveSettings();
+            updateTables();
+            
+            Swal.fire({
+                icon: 'success',
+                title: '설정 저장 완료',
+                text: '설정이 성공적으로 저장되었습니다.',
+                timer: 1500
+            });
+        }
+    } catch (error) {
+        console.error('설정 처리 실패:', error);
+        Swal.fire({
+            icon: 'error',
+            title: '오류',
+            text: '설정 처리 중 오류가 발생했습니다.'
+        });
+    }
+});
+
+// 초기 로드 시 설정도 함께 로드
+window.onload = function() {
+    loadData();
+    loadSettings();
+};
 
 // 완료된 투자 수정 함수 수정
 async function editCompletedInvestment(id) {
